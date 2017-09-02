@@ -118,8 +118,8 @@ static BINARY_TREE_NODE* CreateTreeNode(TCHAR *pDirPath, int hierarchy)
     {
         return NULL;
     }
-    StringCbLength(pDirPath, MAX_PATH, &pathLen);
-    StringCbCopyN(pNode->dirPath, MAX_PATH, pDirPath, pathLen + 1);
+    StringCbLength(pDirPath, MAX_PATH * sizeof(TCHAR), &pathLen);
+    StringCbCopyN(pNode->dirPath, MAX_PATH * sizeof(TCHAR), pDirPath, pathLen + 1);
     pNode->pChild = NULL;
     pNode->pBrother = NULL;
     pNode->hierarchy = hierarchy;
@@ -175,20 +175,20 @@ static int ListDirectoryFiles(BINARY_TREE_NODE *parent, TREE_NODE_STACK *pStack)
     BINARY_TREE_NODE *pNode = NULL;
     TCHAR dir[MAX_PATH];
 
-    StringCbLength(parent->dirPath, MAX_PATH, &dirPathLen);
+    StringCbLength(parent->dirPath, MAX_PATH * sizeof(TCHAR), &dirPathLen);
     if (0 != parent->hierarchy)
     {//hierarchy = 0表示根节点
-        StringCbLength(parent->fileData.cFileName, MAX_PATH, &fNameLen);
+        StringCbLength(parent->fileData.cFileName, MAX_PATH * sizeof(TCHAR), &fNameLen);
     }
-    if (dirPathLen + fNameLen >= (MAX_PATH - 1) * 2)
+    if (dirPathLen + fNameLen >= (MAX_PATH - 1) * sizeof(TCHAR))
     {//还要追加"\*"以及结束符
         return ERR_STR_TOO_LONG;
     }
-    StringCbCopyN(dir, MAX_PATH, parent->dirPath, dirPathLen + 1);
+    StringCbCopyN(dir, MAX_PATH * sizeof(TCHAR), parent->dirPath, dirPathLen + 1);
     if (0 != fNameLen)
     {//追加当前文件夹名
-        StringCbCatN(dir, MAX_PATH, parent->fileData.cFileName, fNameLen);
-        StringCbCatN(dir, MAX_PATH, TEXT("\\"), sizeof(TCHAR));//追加一个目录符
+        StringCbCatN(dir, MAX_PATH * sizeof(TCHAR), parent->fileData.cFileName, fNameLen);
+        StringCbCatN(dir, MAX_PATH * sizeof(TCHAR), TEXT("\\"), sizeof(TCHAR));//追加一个目录符
     }
 
     pNode = CreateTreeNode(dir, parent->hierarchy + 1);
@@ -198,12 +198,12 @@ static int ListDirectoryFiles(BINARY_TREE_NODE *parent, TREE_NODE_STACK *pStack)
     }
 
     //目录名后追加"\*"
-    StringCbCatN(dir, MAX_PATH, TEXT("\\*"), 2 * sizeof(TCHAR));
+    StringCbCatN(dir, MAX_PATH * sizeof(TCHAR), TEXT("\\*"), 2 * sizeof(TCHAR));
     hFind = FindFirstFile(dir, &pNode->fileData);
     if (INVALID_HANDLE_VALUE == hFind)
     {
         free(pNode);
-        return ERR_SUCCESS;
+        return GetLastError();
     }
     
     while (_tcscmp(pNode->fileData.cFileName, TEXT(".")) == 0
@@ -213,7 +213,8 @@ static int ListDirectoryFiles(BINARY_TREE_NODE *parent, TREE_NODE_STACK *pStack)
         if (0 == ret)
         {//返回值为0表示失败
             FindClose(hFind);
-            return ERROR_NO_MORE_FILES == GetLastError() ? ERR_SUCCESS : ERR_FAILED;
+			ret = GetLastError();
+            return ERROR_NO_MORE_FILES == ret ? ERR_SUCCESS : ret;
         }
     }
     parent->pChild = pNode;
@@ -238,7 +239,7 @@ int ListDirectoryFiles(char *dirPath, void **ppFileTree)
     BINARY_TREE_NODE *pNode = NULL;
     int dirLen = strlen(dirPath) + 1;
 
-    if (dirLen >= MAX_PATH)
+    if (dirLen > MAX_PATH * sizeof(TCHAR))
     {
         return ERR_STR_TOO_LONG;
     }
@@ -362,21 +363,20 @@ static int PrintChildren(BINARY_TREE_NODE *pNode, TREE_NODE_STACK *pStack)
             _tprintf(TEXT("|\n"));
         }
         _tprintf(TEXT("|%s%s\n"), TEXT("--"), pNode->fileData.cFileName);
-        /**遍历兄弟节点,将兄弟节点压栈**/
+        /**将兄弟节点压栈**/
         pBrother = pNode->pBrother;
         if(NULL != pBrother)
         {
             ret = Push(pStack, pBrother);
             if (ERR_SUCCESS != ret)
             {
-                return ret;
+                break;
             }
-            /*pBrother = pBrother->pBrother;*/
         }
         pNode = pNode->pChild;
     }
 
-    return ERR_SUCCESS;
+    return ret;
 }
 
 int PrintFileTree(void *pFileTree)
@@ -384,7 +384,7 @@ int PrintFileTree(void *pFileTree)
     int ret = ERR_SUCCESS;
     TREE_NODE_STACK *pStack = NULL;
     BINARY_TREE_NODE *pNode = NULL;
-    TCHAR rootName[10] = {0};
+	TCHAR rootName[5] = {0};
 
     if (NULL == pFileTree)
     {
@@ -398,8 +398,12 @@ int PrintFileTree(void *pFileTree)
     }
 
     pNode = ((BINARY_TREE_NODE *) pFileTree)->pChild;//获取根节点的子节点
-    StringCbCopyN(rootName, 10, pNode->dirPath, 2 * sizeof(TCHAR));
-    StringCbCatN(rootName, 10, TEXT(".\n"), 2 * sizeof(TCHAR));
+	if (NULL == pNode)
+	{//没有子节点,也就是说该目录是一个空目录
+		return ERR_SUCCESS;
+	}
+    StringCbCopyN(rootName, 5 * sizeof(TCHAR), pNode->dirPath, 2 * sizeof(TCHAR));
+    StringCbCatN(rootName, 5 * sizeof(TCHAR), TEXT(".\n"), 3 * sizeof(TCHAR));
     _tprintf(TEXT("%s"), rootName);
 
     while(NULL != pNode)
