@@ -19,17 +19,24 @@ typedef struct _HASH_TABLE {
 static int KeyToIndex(void *p, int capacity)
 {
     size_t addr = (size_t)p;
-    return addr % (capacity * capacity);
+    return addr % (capacity);
 }
 
-int CreateHashTable(void **ppHashTb, int capacity)
+void* CreateHashTable(int capacity)
 {
-    HASH_TABLE *pHashTb = (HASH_TABLE *)malloc(sizeof(HASH_TABLE) + capacity * sizeof(BLUCKET_ELEM));
+    HASH_TABLE *pHashTb = (HASH_TABLE *)malloc(sizeof(HASH_TABLE));
 
     if (NULL == pHashTb)
     {
-        return ERR_MALLOC_MEM_FAILD;
+        return NULL;
     }
+	pHashTb->pElems = (BLUCKET_ELEM *)malloc(capacity * sizeof(BLUCKET_ELEM));
+	if (NULL == pHashTb->pElems)
+	{
+		free(pHashTb);
+		return NULL;
+	}
+
     pHashTb->capacity = capacity;
     pHashTb->used = 0;
     for (int i = 0; i < capacity; ++i)
@@ -39,9 +46,7 @@ int CreateHashTable(void **ppHashTb, int capacity)
         pHashTb->pElems[i].line = 0;
         pHashTb->pElems[i].pNext = NULL;
     }
-    *ppHashTb = pHashTb;
-
-    return ERR_SUCCESS;
+    return pHashTb;
 }
 
 void DestroyHashTable(void *pHashTb)
@@ -98,7 +103,7 @@ int InsertToHashTable(void *pHashTb, void *p, char *pFile, int line)
         pTb->used++;
     }
     else
-    {//发生碰撞时,直接插入到该元素所对应的链表的头部
+    {
         pElem = (BLUCKET_ELEM *)malloc(sizeof(BLUCKET_ELEM));
         if (NULL == pElem)
         {
@@ -107,7 +112,7 @@ int InsertToHashTable(void *pHashTb, void *p, char *pFile, int line)
         pElem->p = p;
         pElem->pFile = pFile;
         pElem->line = line;
-
+		//发生碰撞时,直接插入到该元素所对应的链表的头部
         pElem->pNext = pTb->pElems[index].pNext;
         pTb->pElems[index].pNext = pElem;
     }
@@ -128,12 +133,60 @@ bool IsInHashTable(void *pHashTb, void *p)
 
     index = KeyToIndex(p, pTb->capacity);
     pElem = &pTb->pElems[index];
-    while (pElem->p != p)
-    {
-        pElem = pElem->pNext;
-    }
+	do 
+	{
+		if (pElem->p == p)
+		{
+			return true;
+		}
+		pElem = pElem->pNext;
+	} while (NULL != pElem);
 
-    return NULL != pElem;
+    return false;
+}
+
+bool IsHashTableEmpty(void *pHashTb)
+{
+	HASH_TABLE *pTb = NULL;
+
+	if (NULL == pHashTb)
+	{
+		return false;
+	}
+	pTb = (HASH_TABLE *)pHashTb;
+	return pTb->used == 0;
+}
+
+static void PrintElem(BLUCKET_ELEM *pElem)
+{
+	if (NULL == pElem->p)
+	{
+		return;
+	}
+	do 
+	{
+		printf("mem_addr:%x, file:%s, line:%d\n", pElem->p, pElem->pFile, pElem->line);
+		pElem = pElem->pNext;
+	} while (NULL != pElem);
+}
+
+int	PrintElems(void *pHashTb)
+{
+	HASH_TABLE *pTb = NULL;
+	BLUCKET_ELEM **ppNext = NULL;
+
+	if (NULL == pHashTb)
+	{
+		return ERR_INVALID_PARAM;
+	}
+	pTb = (HASH_TABLE *)pHashTb;
+
+	for (int index = 0; index < pTb->capacity; ++index)
+	{
+		PrintElem(&pTb->pElems[index]);
+	}
+
+	return ERR_SUCCESS;
 }
 
 int DeleteFromHashTable(void *pHashTb, void *p)
@@ -151,16 +204,16 @@ int DeleteFromHashTable(void *pHashTb, void *p)
     index = KeyToIndex(p, pTb->capacity);
     ppNext = &pTb->pElems[index].pNext;
     if (pTb->pElems[index].p == p)
-    {//特殊处理表头
+    {
         if (NULL == *ppNext)
-        {
+        {//数组元素对应的链表为NULL
             pTb->pElems[index].pFile = NULL;
             pTb->pElems[index].line = 0;
             pTb->used--;
             free(pTb->pElems[index].p);
         }
         else
-        {
+        {//将数组元素对应链表首个节点的值copy到数组元素,并删除该节点
             pTb->pElems[index].p = (*ppNext)->p;
             pTb->pElems[index].pFile = (*ppNext)->pFile;
             pTb->pElems[index].line = (*ppNext)->line;
@@ -171,18 +224,21 @@ int DeleteFromHashTable(void *pHashTb, void *p)
         return ERR_SUCCESS;
     }
 
-    while(NULL == *ppNext && (*ppNext)->p != p)
-    {
-        ppNext = &((*ppNext)->pNext);
-    }
-    if (NULL == *ppNext)
-    {
-        return ERR_NOT_FIND;
-    }
-    BLUCKET_ELEM *pDel = *ppNext;
-    *ppNext = (*ppNext)->pNext;
-    free(pDel->p);
-    free(pDel);
+	while(NULL != *ppNext && (*ppNext)->p != p)
+	{
+		ppNext = &((*ppNext)->pNext);
+	}
 
-    return ERR_SUCCESS;
+	if (NULL == *ppNext)
+	{
+		return ERR_NOT_FIND;
+	}
+	else
+	{
+		BLUCKET_ELEM *pDel = *ppNext;
+		*ppNext = (*ppNext)->pNext;
+		free(pDel->p);
+		free(pDel);
+		return ERR_SUCCESS;
+	}
 }
