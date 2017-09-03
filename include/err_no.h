@@ -14,5 +14,6 @@
 #define ERR_STACK_EMPTY         107
 #define ERR_STR_TOO_LONG        108
 #define ERR_NOT_FIND            109
+#define ERR_NOT_INITIALIZED		110
 
 #endif//_ERR_NO_H
