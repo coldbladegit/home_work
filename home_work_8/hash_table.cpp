@@ -19,7 +19,7 @@ typedef struct _HASH_TABLE {
 static int KeyToIndex(void *p, int capacity)
 {
     size_t addr = (size_t)p;
-    return addr % (capacity);
+    return addr / (capacity - 1) % (capacity);
 }
 
 void* CreateHashTable(int capacity)
@@ -192,6 +192,7 @@ int	PrintElems(void *pHashTb)
 int DeleteFromHashTable(void *pHashTb, void *p)
 {
     HASH_TABLE *pTb = NULL;
+    BLUCKET_ELEM *pDel = NULL;
     BLUCKET_ELEM **ppNext = NULL;
     int index;
 
@@ -211,15 +212,17 @@ int DeleteFromHashTable(void *pHashTb, void *p)
             pTb->pElems[index].line = 0;
             pTb->used--;
             free(pTb->pElems[index].p);
+            pTb->pElems[index].p = NULL;
         }
         else
         {//将数组元素对应链表首个节点的值copy到数组元素,并删除该节点
-            pTb->pElems[index].p = (*ppNext)->p;
-            pTb->pElems[index].pFile = (*ppNext)->pFile;
-            pTb->pElems[index].line = (*ppNext)->line;
-            pTb->pElems[index].pNext = (*ppNext)->pNext;
-            free((*ppNext)->p);
-            free(*ppNext);
+            free(pTb->pElems[index].p);
+            pDel = *ppNext;
+            pTb->pElems[index].p = pDel->p;
+            pTb->pElems[index].pFile = pDel->pFile;
+            pTb->pElems[index].line = pDel->line;
+            pTb->pElems[index].pNext = pDel->pNext;
+            free(pDel);
         }
         return ERR_SUCCESS;
     }
@@ -235,10 +238,21 @@ int DeleteFromHashTable(void *pHashTb, void *p)
 	}
 	else
 	{
-		BLUCKET_ELEM *pDel = *ppNext;
-		*ppNext = (*ppNext)->pNext;
+		pDel = *ppNext;
+		*ppNext = pDel->pNext;
 		free(pDel->p);
 		free(pDel);
 		return ERR_SUCCESS;
 	}
+}
+
+int GetUsed(void *pHashTb, int *used)
+{
+    if (NULL == pHashTb)
+    {
+        return ERR_INVALID_PARAM;
+    }
+
+    *used = ((HASH_TABLE *)pHashTb)->used;
+    return ERR_SUCCESS;
 }

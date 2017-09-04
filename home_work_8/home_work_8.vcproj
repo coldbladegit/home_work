@@ -175,6 +175,14 @@
 				RelativePath=".\hash_table.cpp"
 				>
 			</File>
+			<File
+				RelativePath=".\lib_malloc_free.cpp"
+				>
+			</File>
+			<File
+				RelativePath=".\main.cpp"
+				>
+			</File>
 		</Filter>
 		<Filter
 			Name="Í·ÎÄ¼þ"
@@ -187,6 +195,10 @@
 			</File>
 			<File
 				RelativePath=".\hash_table.h"
+				>
+			</File>
+			<File
+				RelativePath=".\lib_malloc_free.h"
 				>
 			</File>
 		</Filter>

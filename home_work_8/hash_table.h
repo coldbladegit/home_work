@@ -15,4 +15,6 @@ int	PrintElems(void *pHashTb);
 
 int DeleteFromHashTable(void *pHashTb, void *p);
 
+int GetUsed(void *pHashTb, int *used);
+
 #endif//_HASH_TABLE_H
