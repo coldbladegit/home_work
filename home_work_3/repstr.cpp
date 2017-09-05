@@ -31,6 +31,7 @@ static int Initialize(REP_WORD_PARAM *pRepWordParam, FILE_READER *pReader, FILE_
     fopen_s(&pWriter->pWStream, pRepWordParam->pDestFile, "w+t");
     if (NULL == pReader->pRStream || NULL == pWriter->pWStream)
     {
+        pReader->pBuf = NULL;//防止释放的时候由于没初值导致错误的释放
         return ERR_OPEN_FILE_FAILD;
     }
 
@@ -112,7 +113,7 @@ static inline int FirstNextWord(FILE_READER *pReader, int *wordLen)
     return ERR_SUCCESS;
 }
 
-static inline int DoParse(FILE_READER *pReader, FILE_WRITER *pWriter)
+static int DoParse(FILE_READER *pReader, FILE_WRITER *pWriter)
 {
     int ret = ERR_SUCCESS, wordLen = 0;
 
@@ -163,8 +164,16 @@ static int DoReplace(FILE_READER *pReader, FILE_WRITER *pWriter)
     {
         if (pReader->reserved > 0)
         {//处理最后遗留在缓冲区中的字串
-            pReader->rOffset = pReader->reserved;
-            WriteFile(pWriter, pReader, false);
+            if (pReader->reserved == pReader->wordLen 
+                && memcmp(pReader->pSrcWord, pReader->pBuf + pReader->rOffset, pReader->wordLen) == 0)
+            {//要替换的单词
+                WriteFile(pWriter, pReader, true);
+            }
+            else
+            {
+                pReader->rOffset = pReader->reserved;
+                WriteFile(pWriter, pReader, false);
+            }
         }
         ret = ERR_SUCCESS;
     }

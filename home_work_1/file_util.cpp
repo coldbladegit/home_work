@@ -7,7 +7,7 @@
 
 #define READ_BUF_SIZE                         1024  //1K
 #define LINE_CHAR_CNT                         16
-#define LINE_DATA_ASCII_BUF_SIZE              49
+#define LINE_DATA_ASCII_BUF_SIZE              (LINE_CHAR_CNT * 3)
 
 typedef struct _FILE_INFO_EX 
 {
@@ -21,7 +21,7 @@ typedef struct _LINE_DATA
     short charCnt; //处理的字符个数
     short curIndex;//ascBuf当前的偏移
     int   lineIndex;//行数据的索引
-    char  ascBuf[LINE_DATA_ASCII_BUF_SIZE];
+    char  ascBuf[LINE_DATA_ASCII_BUF_SIZE + 1];//最后一个为结束符
     char  charBuf[LINE_CHAR_CNT + 1];//最后一个为结束符
 }LINE_DATA, *PLINE_DATA;
 
@@ -51,7 +51,7 @@ static inline void PrintLineData(LINE_DATA *pData)
     pData->charCnt = 0;
     pData->curIndex = 0;
     pData->lineIndex += LINE_CHAR_CNT;
-    memset(pData->ascBuf, ' ', LINE_DATA_ASCII_BUF_SIZE - 1);
+    memset(pData->ascBuf, ' ', LINE_DATA_ASCII_BUF_SIZE);
     memset(pData->charBuf, 0, sizeof(pData->charBuf));
 }
 
@@ -68,11 +68,27 @@ static int Initialize(const char *fPath, LINE_DATA *pData, FILE_INFO_EX *pFileIn
     pData->charCnt = 0;
     pData->curIndex = 0;
     pData->lineIndex = 0;
-    memset(pData->ascBuf, ' ', LINE_DATA_ASCII_BUF_SIZE - 1);
-    pData->ascBuf[LINE_DATA_ASCII_BUF_SIZE - 1] = '\0';//默认最后一个为结束符
+    memset(pData->ascBuf, ' ', LINE_DATA_ASCII_BUF_SIZE);
+    pData->ascBuf[LINE_DATA_ASCII_BUF_SIZE] = '\0';//默认最后一个为结束符
     memset(pData->charBuf, 0, sizeof(pData->charBuf));
 
     return ERR_SUCCESS;
+}
+
+static void Destroy()
+{
+    //TODO:
+}
+
+static void PrintHeader(FILE_INFO_EX *pFileInfo) 
+{//start read file
+    printf("====== %s ====== len: %ld(%04xh)\n", pFileInfo->pFilePath, pFileInfo->fileSize, pFileInfo->fileSize);
+    printf("        ");
+    for (int i = 0; i < LINE_CHAR_CNT - 1; ++i)
+    {
+        printf("%02x ", i);    
+    }
+    printf("%02x\n", LINE_CHAR_CNT - 1);
 }
 
 static void PrintBuffer(char *pBuf, int cnt, LINE_DATA *pData)
@@ -103,9 +119,7 @@ int PrintFile(const char *fPath)
         return ret;
     }
     
-    //start read file
-    printf("====== %s ====== len: %ld(%04xh)\n", pFileInfo->pFilePath, pFileInfo->fileSize, pFileInfo->fileSize);
-    printf("        00 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f\n");
+    PrintHeader(pFileInfo);
     
     while (!feof(pFileInfo->pStream))
     {
@@ -125,5 +139,7 @@ int PrintFile(const char *fPath)
     }
     
     fclose(pFileInfo->pStream);
+    //destroy (current is do nothing)
+    Destroy();
     return ret;
 }
