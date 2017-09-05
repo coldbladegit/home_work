@@ -3,11 +3,9 @@
 #include <malloc.h>
 #include <wchar.h>
 #include <strsafe.h>
-
 #include "file_tree.h"
 #include "err_no.h"
-
-#define  ADD_STACK_SIZE_PER     100
+#include "cb_stack.h"
 
 typedef struct _BINARY_TREE_NODE {
     int                    hierarchy;//层级
@@ -16,12 +14,6 @@ typedef struct _BINARY_TREE_NODE {
     WIN32_FIND_DATA        fileData;
     TCHAR                  dirPath[MAX_PATH];
 }BINARY_TREE_NODE;
-
-typedef struct _TREE_NODE_STACK{
-    int size;
-    int capacity;
-    BINARY_TREE_NODE    **ppNodes;
-}TREE_NODE_STACK;
 
 static int CompareTreeNode(BINARY_TREE_NODE *pNode1, BINARY_TREE_NODE *pNode2)
 {//先比较高位,再比较低位
@@ -48,66 +40,6 @@ static void SwapTreeNode(BINARY_TREE_NODE *pNode1, BINARY_TREE_NODE *pNode2)
     memcpy(&pNode2->fileData, &fileData, size);
 }
 
-static TREE_NODE_STACK* CreateStack()
-{
-    TREE_NODE_STACK *pStack = (TREE_NODE_STACK*)malloc(sizeof(TREE_NODE_STACK));
-    if (NULL == pStack)
-    {
-        return NULL;
-    }
-    pStack->ppNodes = (BINARY_TREE_NODE **)malloc(sizeof(BINARY_TREE_NODE *) * ADD_STACK_SIZE_PER);
-    if (NULL == pStack->ppNodes)
-    {
-        free(pStack);
-        return NULL;
-    }
-    pStack->capacity = ADD_STACK_SIZE_PER;
-    pStack->size = 0;
-
-    return pStack;
-}
-
-static void DestroyStack(TREE_NODE_STACK *pStack)
-{
-    if (NULL != pStack->ppNodes)
-    {
-        free(pStack->ppNodes);
-    }
-    free(pStack);
-}
-
-static int Push(TREE_NODE_STACK *pStack, BINARY_TREE_NODE *pNode)
-{
-    if (pStack->capacity <= pStack->size)
-    {
-        BINARY_TREE_NODE **ppNodes = 
-            (BINARY_TREE_NODE **)malloc(sizeof(BINARY_TREE_NODE *) * (pStack->capacity + ADD_STACK_SIZE_PER));
-        if (NULL == ppNodes)
-        {
-            return ERR_MALLOC_MEM_FAILD;
-        }
-        memcpy(ppNodes, pStack->ppNodes, pStack->size * sizeof(BINARY_TREE_NODE *));
-        free(pStack->ppNodes);
-        pStack->ppNodes = ppNodes;
-        pStack->capacity += ADD_STACK_SIZE_PER;
-    }
-
-    pStack->ppNodes[pStack->size] = pNode;
-    pStack->size++;
-    
-    return ERR_SUCCESS;
-}
-
-static BINARY_TREE_NODE* Pop(TREE_NODE_STACK *pStack)
-{
-    if (pStack->size == 0)
-    {
-        return NULL;
-    }
-    pStack->size--;
-    return pStack->ppNodes[pStack->size];
-}
-
 static BINARY_TREE_NODE* CreateTreeNode(TCHAR *pDirPath, int hierarchy)
 {
     size_t pathLen;
@@ -127,7 +59,7 @@ static BINARY_TREE_NODE* CreateTreeNode(TCHAR *pDirPath, int hierarchy)
     return pNode;
 }
 
-static int ListBrothers(BINARY_TREE_NODE *pBrother, HANDLE hFind, TREE_NODE_STACK *pStack)
+static int ListBrothers(BINARY_TREE_NODE *pBrother, HANDLE hFind, void *pStack)
 {
     int ret = ERR_SUCCESS;
     BINARY_TREE_NODE *pNode = NULL;
@@ -148,7 +80,7 @@ static int ListBrothers(BINARY_TREE_NODE *pBrother, HANDLE hFind, TREE_NODE_STAC
             pBrother->pBrother = pNode;
             if ((pNode->fileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0)
             {//是一个文件夹
-                ret = Push(pStack, pNode);
+                ret = cb_stack_push(pStack, pNode);
                 if (ERR_SUCCESS != ret)
                 {
                     break;
@@ -166,7 +98,7 @@ static int ListBrothers(BINARY_TREE_NODE *pBrother, HANDLE hFind, TREE_NODE_STAC
     return ret;
 }
 
-static int ListDirectoryFiles(BINARY_TREE_NODE *parent, TREE_NODE_STACK *pStack)
+static int ListDirectoryFiles(BINARY_TREE_NODE *parent, void *pStack)
 {
     int ret = ERR_SUCCESS;
     size_t dirPathLen = 0;
@@ -220,7 +152,7 @@ static int ListDirectoryFiles(BINARY_TREE_NODE *parent, TREE_NODE_STACK *pStack)
     parent->pChild = pNode;
     if ((pNode->fileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0)
     {//是一个文件夹
-        ret = Push(pStack, pNode);
+        ret = cb_stack_push(pStack, pNode);
         if (ERR_SUCCESS != ret)
         {
             return ret;
@@ -235,7 +167,7 @@ int ListDirectoryFiles(char *dirPath, void **ppFileTree)
 {
     int ret = ERR_SUCCESS;
     TCHAR dir[MAX_PATH];
-    TREE_NODE_STACK *pStack = NULL;
+    void *pStack = NULL;
     BINARY_TREE_NODE *pNode = NULL;
     int dirLen = strlen(dirPath) + 1;
 
@@ -250,10 +182,9 @@ int ListDirectoryFiles(char *dirPath, void **ppFileTree)
 
     do 
     {
-        pStack = CreateStack();
-        if (NULL == pStack)
+        ret = cb_create_stack(&pStack);
+        if (ERR_SUCCESS != ret)
         {
-            ret = ERR_MALLOC_MEM_FAILD;
             break;
         }
 
@@ -272,18 +203,18 @@ int ListDirectoryFiles(char *dirPath, void **ppFileTree)
             {
                 break;
             }
-            pNode = Pop(pStack);
+            pNode = (BINARY_TREE_NODE *) cb_stack_pop(pStack);
         }
     } while (0);
 
     if (NULL != pStack)
     {
-        DestroyStack(pStack);
+        cb_destroy_stack(pStack);
     }
     return ret;
 }
 
-static int SortBrotherNodes(BINARY_TREE_NODE *pNode, TREE_NODE_STACK *pStack)
+static int SortBrotherNodes(BINARY_TREE_NODE *pNode, void *pStack)
 {
     int ret = ERR_SUCCESS;
     BINARY_TREE_NODE *p, *q, *pTmp;
@@ -304,7 +235,7 @@ static int SortBrotherNodes(BINARY_TREE_NODE *pNode, TREE_NODE_STACK *pStack)
         }
         if (NULL != p->pChild)
         {
-            ret = Push(pStack, p->pChild);
+            ret = cb_stack_push(pStack, p->pChild);
             if (ERR_SUCCESS != ret)
             {
                 break;
@@ -317,7 +248,7 @@ static int SortBrotherNodes(BINARY_TREE_NODE *pNode, TREE_NODE_STACK *pStack)
 int SortByModifyTime(void *pFileTree)
 {
     int ret = ERR_SUCCESS;
-    TREE_NODE_STACK *pStack = NULL;
+    void *pStack = NULL;
     BINARY_TREE_NODE *pNode = NULL;
 
     if (NULL == pFileTree)
@@ -325,10 +256,10 @@ int SortByModifyTime(void *pFileTree)
         return ERR_SUCCESS;
     }
 
-    pStack = CreateStack();
-    if (NULL == pStack)
+    ret = cb_create_stack(&pStack);
+    if (ERR_SUCCESS != ret)
     {
-        return ERR_MALLOC_MEM_FAILD;
+        return ret;
     }
 
     pNode = ((BINARY_TREE_NODE *) pFileTree)->pChild;//获取根节点的子节点
@@ -339,14 +270,14 @@ int SortByModifyTime(void *pFileTree)
         {
             break;
         }
-        pNode = Pop(pStack);
+        pNode = (BINARY_TREE_NODE *) cb_stack_pop(pStack);
     }
 
-    DestroyStack(pStack);
+    cb_destroy_stack(pStack);
     return ret;
 }
 
-static int PrintChildren(BINARY_TREE_NODE *pNode, TREE_NODE_STACK *pStack)
+static int PrintChildren(BINARY_TREE_NODE *pNode, void *pStack)
 {
     int ret = ERR_SUCCESS;
     BINARY_TREE_NODE *pBrother = NULL;
@@ -367,7 +298,7 @@ static int PrintChildren(BINARY_TREE_NODE *pNode, TREE_NODE_STACK *pStack)
         pBrother = pNode->pBrother;
         if(NULL != pBrother)
         {
-            ret = Push(pStack, pBrother);
+            ret = cb_stack_push(pStack, pBrother);
             if (ERR_SUCCESS != ret)
             {
                 break;
@@ -382,7 +313,7 @@ static int PrintChildren(BINARY_TREE_NODE *pNode, TREE_NODE_STACK *pStack)
 int PrintFileTree(void *pFileTree)
 {
     int ret = ERR_SUCCESS;
-    TREE_NODE_STACK *pStack = NULL;
+    void *pStack = NULL;
     BINARY_TREE_NODE *pNode = NULL;
 	TCHAR rootName[5] = {0};
 
@@ -391,10 +322,10 @@ int PrintFileTree(void *pFileTree)
         return ERR_SUCCESS;
     }
 
-    pStack = CreateStack();
-    if (NULL == pStack)
+    ret = cb_create_stack(&pStack);
+    if (ERR_SUCCESS != ret)
     {
-        return ERR_MALLOC_MEM_FAILD;
+        return ret;
     }
 
     pNode = ((BINARY_TREE_NODE *) pFileTree)->pChild;//获取根节点的子节点
@@ -413,17 +344,17 @@ int PrintFileTree(void *pFileTree)
         {
             break;
         }
-        pNode = Pop(pStack);
+        pNode = (BINARY_TREE_NODE *) cb_stack_pop(pStack);
     }
 
-    DestroyStack(pStack);
+    cb_destroy_stack(pStack);
     return ret;
 }
 
 int FreeFileTree(void *pFileTree)
 {
     int ret = ERR_SUCCESS;
-    TREE_NODE_STACK  *pStack = NULL;
+    void *pStack = NULL;
     BINARY_TREE_NODE *pNode = NULL;
     BINARY_TREE_NODE *pTmp = NULL;
     
@@ -432,10 +363,10 @@ int FreeFileTree(void *pFileTree)
         return ERR_SUCCESS;
     }
 
-    pStack = CreateStack();
-    if (NULL == pStack)
+    ret = cb_create_stack(&pStack);
+    if (ERR_SUCCESS != ret)
     {
-        return ERR_MALLOC_MEM_FAILD;
+        return ret;
     }
 
     pNode = (BINARY_TREE_NODE *) pFileTree;
@@ -443,22 +374,21 @@ int FreeFileTree(void *pFileTree)
     {//广度优先遍历
         if (NULL != pNode->pBrother)
         {
-            ret = Push(pStack, pNode);
+            ret = cb_stack_push(pStack, pNode);
             pNode = pNode->pBrother;
         }
         else if (NULL != pNode->pChild)
         {
-            ret = Push(pStack, pNode);
+            ret = cb_stack_push(pStack, pNode);
             pNode = pNode->pChild;
         }
         else
         {
             pTmp = pNode;
-            pNode = Pop(pStack);
-            free(pTmp);
+            pNode = (BINARY_TREE_NODE *) cb_stack_pop(pStack);        
             if (NULL != pNode)
             {
-                if (pNode->pBrother == pTmp)
+                if (pTmp == pNode->pBrother)
                 {
                     pNode->pBrother = NULL;
                 }
@@ -467,13 +397,10 @@ int FreeFileTree(void *pFileTree)
                     pNode->pChild = NULL;
                 }
             }
-            else
-            {
-                break;
-            }
+            free(pTmp);
         }
-    } while (ERR_SUCCESS == ret);
+    } while (ERR_SUCCESS == ret && NULL != pNode);
     
-    DestroyStack(pStack);
+    cb_destroy_stack(pStack);
     return ret;
 }

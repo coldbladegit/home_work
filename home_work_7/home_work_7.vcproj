@@ -6,6 +6,7 @@
 	ProjectGUID="{36E819CE-F96E-4423-803F-659EF0311B4E}"
 	RootNamespace="home_work_7"
 	Keyword="Win32Proj"
+	AssemblyReferenceSearchPaths="&quot;..\cb_lib&quot;"
 	TargetFrameworkVersion="196613"
 	>
 	<Platforms>
@@ -61,7 +62,9 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
+				AdditionalDependencies="cb_lib.lib"
 				LinkIncremental="2"
+				AdditionalLibraryDirectories="$(SolutionDir)\cb_lib"
 				GenerateDebugInformation="true"
 				SubSystem="1"
 				TargetMachine="1"
