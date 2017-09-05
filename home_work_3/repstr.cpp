@@ -101,7 +101,7 @@ static inline void WriteFile(FILE_WRITER *pWriter, FILE_READER *pReader, bool is
     }
 }
 
-static inline int FirstNextWord(FILE_READER *pReader, int *wordLen)
+static inline int FindNextWord(FILE_READER *pReader, int *wordLen)
 {
     char *pBuf = pReader->pBuf + pReader->rOffset;
     char *pStr = strchr(pBuf, ' ');
@@ -119,7 +119,7 @@ static int DoParse(FILE_READER *pReader, FILE_WRITER *pWriter)
 
     do 
     {
-        if (ERR_SUCCESS != FirstNextWord(pReader, &wordLen))
+        if (ERR_SUCCESS != FindNextWord(pReader, &wordLen))
         {
             if (pReader->strLen - pReader->rOffset > MAX_WORD_LEN)
             {
