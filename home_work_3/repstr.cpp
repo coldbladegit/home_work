@@ -5,178 +5,168 @@
 #include "repstr.h"
 #include "err_no.h"
 
-#define MAX_BUFF_SIZE 1024
+#define MAX_BUFF_SIZE   1024
+#define MAX_WORD_LEN    1023
 
 typedef struct _FILE_READER_BUFFER{
     int         reserved;//一次解析后剩余的字串
     int         strLen;//当前缓冲中整个字串的长度
-    int         offset;//偏移
+    int         rOffset;//遍历偏移
+    int         wOffset;//写偏移
     int         wordLen;
-    FILE        *pReader;
+    FILE        *pRStream;
     const char  *pSrcWord;
     char        *pBuf;
-}FILE_READER_BUFFER;
+}FILE_READER;
 
-typedef struct _FILE_WRITER_BUFFER{
-    int         offset;
+typedef struct _FILE_WRITER {
     int         wordLen;
-    FILE        *pWriter;
+    FILE        *pWStream;
     const char  *pDestWord;
-    char        pBuf[MAX_BUFF_SIZE];
-}FILE_WRITER_BUFFER;
+}FILE_WRITER;
 
-static int Initialize(REP_WORD_PARAM *pRepWordParam, FILE_READER_BUFFER *pRBuf, FILE_WRITER_BUFFER *pWBuf)
+static int Initialize(REP_WORD_PARAM *pRepWordParam, FILE_READER *pReader, FILE_WRITER *pWriter)
 {
-    fopen_s(&pRBuf->pReader, pRepWordParam->pSrcFile, "r+t");
-    fopen_s(&pWBuf->pWriter, pRepWordParam->pDestFile, "w+t");
-    if (NULL == pRBuf->pReader || NULL == pWBuf->pWriter)
+    fopen_s(&pReader->pRStream, pRepWordParam->pSrcFile, "r+t");
+    fopen_s(&pWriter->pWStream, pRepWordParam->pDestFile, "w+t");
+    if (NULL == pReader->pRStream || NULL == pWriter->pWStream)
     {
         return ERR_OPEN_FILE_FAILD;
     }
 
-    pRBuf->pBuf = (char *)malloc(MAX_BUFF_SIZE * sizeof(char));
-    if (NULL == pRBuf->pBuf)
+    pReader->pBuf = (char *)malloc(MAX_BUFF_SIZE * sizeof(char));
+    if (NULL == pReader->pBuf)
     {
         return ERR_MALLOC_MEM_FAILD;
     }
-    pRBuf->pSrcWord = pRepWordParam->pSrcWord;
-    pRBuf->reserved = 0;
-    pRBuf->strLen = 0;
-    pRBuf->offset = 0;
-    pRBuf->wordLen = strlen(pRepWordParam->pSrcWord);
+    pReader->pSrcWord = pRepWordParam->pSrcWord;
+    pReader->reserved = 0;
+    pReader->strLen = 0;
+    pReader->rOffset = 0;
+    pReader->wOffset = 0;
+    pReader->wordLen = strlen(pRepWordParam->pSrcWord);
 
-    pWBuf->pDestWord = pRepWordParam->pDestWord;
-    pWBuf->offset = 0;
-    pWBuf->wordLen = strlen(pRepWordParam->pDestWord);
+    pWriter->pDestWord = pRepWordParam->pDestWord;
+    pWriter->wordLen = strlen(pRepWordParam->pDestWord);
 
     return ERR_SUCCESS;
 }
 
-static void Destroy(FILE_READER_BUFFER *pRBuf, FILE_WRITER_BUFFER *pWBuf)
+static void Destroy(FILE_READER *pReader, FILE_WRITER *pWriter)
 {
-    if (NULL != pRBuf->pReader)
+    if (NULL != pReader->pRStream)
     {
-        fclose(pRBuf->pReader);
+        fclose(pReader->pRStream);
     }
-    if (NULL != pRBuf->pBuf)
+    if (NULL != pReader->pBuf)
     {
-        free(pRBuf->pBuf);
+        free(pReader->pBuf);
     }
 
-    if (NULL != pWBuf->pWriter)
+    if (NULL != pWriter->pWStream)
     {
-        fclose(pWBuf->pWriter);
+        fclose(pWriter->pWStream);
     }
 }
 
-static inline int ReadBuffer(FILE_READER_BUFFER *pRBuf)
+static inline int ReadFile(FILE_READER *pReader)
 {
-    if (feof(pRBuf->pReader))
+    if (feof(pReader->pRStream))
     {
         return ERR_EOF_FILE;//文件末尾
     }
-    int reserved = pRBuf->reserved;
-    int readCount = fread(pRBuf->pBuf + reserved, sizeof(char), MAX_BUFF_SIZE - reserved - 1, pRBuf->pReader);
-    pRBuf->offset = 0;
-    pRBuf->reserved = 0;
-    pRBuf->strLen = readCount + reserved;
-    pRBuf->pBuf[pRBuf->strLen] = '\0';//追加一个结束符
+    int reserved = pReader->reserved;
+    int readCount = fread(pReader->pBuf + reserved, sizeof(char), MAX_BUFF_SIZE - reserved - 1, pReader->pRStream);
+    pReader->rOffset = 0;
+    pReader->wOffset = 0;
+    pReader->reserved = 0;
+    pReader->strLen = readCount + reserved;
+    pReader->pBuf[pReader->strLen] = '\0';//追加一个结束符
     return ERR_SUCCESS;
 }
 
-static inline void WriteBuffer(FILE_WRITER_BUFFER *pWBuf, const char *pWord)
+static inline void WriteFile(FILE_WRITER *pWriter, FILE_READER *pReader, bool isReplace)
 {
-    int wordLen = strlen(pWord);
-    if (0 == wordLen)
+    int writeLen = pReader->rOffset - pReader->wOffset;
+    if (writeLen > 0)
     {
-        return;
+        fwrite(pReader->pBuf + pReader->wOffset, sizeof(char), writeLen, pWriter->pWStream);
+        pReader->wOffset += writeLen;
     }
-    if (pWBuf->offset + wordLen >= MAX_BUFF_SIZE)
-    {//将要超出写文件的缓冲,先将当前的缓冲写入文件
-        fwrite(pWBuf->pBuf, sizeof(char), pWBuf->offset, pWBuf->pWriter);
-        pWBuf->offset = 0;
+    if (isReplace)
+    {
+        fwrite(pWriter->pDestWord, sizeof(char), pWriter->wordLen, pWriter->pWStream);
+        pReader->wOffset += pReader->wordLen;
     }
-    memcpy(pWBuf->pBuf + pWBuf->offset, pWord, wordLen);
-    pWBuf->offset += wordLen;
 }
 
-static inline int FirstStr(char *pBuf, char *pWord)
+static inline int FirstNextWord(FILE_READER *pReader, int *wordLen)
 {
-    int strLen;
+    char *pBuf = pReader->pBuf + pReader->rOffset;
     char *pStr = strchr(pBuf, ' ');
-
     if (NULL == pStr)
     {
         return ERR_FAILED;
     }
-    strLen = pStr - pBuf;
-    memcpy(pWord, pBuf, strLen);
-    pWord[strLen] = '\0';
+    *wordLen = pStr - pBuf;
     return ERR_SUCCESS;
 }
 
-static inline int DoParse(FILE_READER_BUFFER *pRBuf, FILE_WRITER_BUFFER *pWBuf)
+static inline int DoParse(FILE_READER *pReader, FILE_WRITER *pWriter)
 {
-    char pWord[MAX_BUFF_SIZE];
+    int ret = ERR_SUCCESS, wordLen = 0;
 
-    if (ERR_SUCCESS != FirstStr(pRBuf->pBuf, pWord))
+    do 
     {
-        return ERR_WORD_TOO_LONG;
-    }
-    do
-    {
-        pRBuf->offset += strlen(pWord) + 1;//跳过单词后面的空格
-        if (strcmp(pWord, pRBuf->pSrcWord) == 0)
+        if (ERR_SUCCESS != FirstNextWord(pReader, &wordLen))
         {
-            WriteBuffer(pWBuf, pWBuf->pDestWord);
-        }
-        else
-        {
-            WriteBuffer(pWBuf, pWord);
-        }
-        //往写缓冲中追加一个空格
-        WriteBuffer(pWBuf, " ");
-
-        if (pRBuf->offset > pRBuf->strLen - 1)
-        {//已到读缓冲中字串的末尾
+            if (pReader->strLen - pReader->rOffset > MAX_WORD_LEN)
+            {
+                ret = ERR_WORD_TOO_LONG;
+            }
             break;
         }
-    } while (ERR_SUCCESS == FirstStr(pRBuf->pBuf + pRBuf->offset, pWord));
-    if (pRBuf->offset == pRBuf->strLen)
-    {//读缓冲中的字串最后一个字符为空格
-        //往写缓冲中追加一个空格
-        WriteBuffer(pWBuf, " ");
-    }
-    else 
+        if (wordLen == pReader->wordLen && memcmp(pReader->pSrcWord, pReader->pBuf + pReader->rOffset, wordLen) == 0)
+        {//遇到单词替换的情况就去写一次文件
+            WriteFile(pWriter, pReader, true);
+        }
+        pReader->rOffset += wordLen + 1;//跳过空格字符
+    } while (pReader->rOffset < pReader->strLen);
+    
+    if (ERR_SUCCESS == ret)
     {
-        pRBuf->reserved = pRBuf->strLen - pRBuf->offset;
-        memcpy(pRBuf->pBuf, pRBuf->pBuf + pRBuf->offset, pRBuf->reserved);//将剩余字串移动到缓冲最前端
+        //将缓冲区中的之前遍历了但未写入文件的字串写入文件
+        WriteFile(pWriter, pReader, false);
+        pReader->reserved = pReader->strLen - pReader->rOffset;
+        if (pReader->reserved > 0 && pReader->rOffset > 0)
+        {//缓冲区中最后一个字符不是空格,则移动未解析的字串到缓冲区的首部
+            memmove(pReader->pBuf,  pReader->pBuf + pReader->rOffset, pReader->reserved);
+        }
     }
-    return ERR_SUCCESS;
+    return ret;
 }
 
-static int DoReplace(FILE_READER_BUFFER *pRBuf, FILE_WRITER_BUFFER *pWBuf)
+static int DoReplace(FILE_READER *pReader, FILE_WRITER *pWriter)
 {
     int ret;
 
     do 
     {
-        ret = ReadBuffer(pRBuf);
+        ret = ReadFile(pReader);
         if (ERR_SUCCESS == ret)
         {
-            ret = DoParse(pRBuf, pWBuf);
+            ret = DoParse(pReader, pWriter);
         }
     } while (ERR_SUCCESS == ret);
-    if (ERR_SUCCESS == ret || ERR_EOF_FILE == ret)
+
+    if (ERR_EOF_FILE == ret)
     {
-        if (pRBuf->reserved != 0)
-        {
-            WriteBuffer(pWBuf, pRBuf->pBuf + pRBuf->offset);
+        if (pReader->reserved > 0)
+        {//处理最后遗留在缓冲区中的字串
+            pReader->rOffset = pReader->reserved;
+            WriteFile(pWriter, pReader, false);
         }
-        if (pWBuf->offset != 0)
-        {
-            fwrite(pWBuf->pBuf, sizeof(char), pWBuf->offset, pWBuf->pWriter);
-        }
+        ret = ERR_SUCCESS;
     }
     return ret;
 }
@@ -184,17 +174,13 @@ static int DoReplace(FILE_READER_BUFFER *pRBuf, FILE_WRITER_BUFFER *pWBuf)
 int ReplaceWord(REP_WORD_PARAM *pRepWordParam)
 {
     int ret = ERR_SUCCESS;
-    FILE_READER_BUFFER fReader;
-    FILE_WRITER_BUFFER fWriter;
+    FILE_READER fReader;
+    FILE_WRITER fWriter;
 
     ret = Initialize(pRepWordParam, &fReader, &fWriter);
     if (ERR_SUCCESS == ret)
     {
         ret = DoReplace(&fReader, &fWriter);
-        if (ERR_EOF_FILE == ret)
-        {
-            ret = ERR_SUCCESS;
-        }
     }
     Destroy(&fReader, &fWriter);
     return ret;
