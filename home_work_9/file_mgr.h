@@ -1,6 +1,8 @@
 #ifndef _FILE_MGR_H
 #define _FILE_MGR_H
 
-int DeleteDirectoryRecursive(TCHAR* pDir);
+int DeleteDirectory(TCHAR* pDir);
+
+int DeleteDirectoryEx(TCHAR *pDir);
 
 #endif//_FILE_MGR_H

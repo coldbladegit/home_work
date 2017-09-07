@@ -89,14 +89,14 @@ static RANGE* Pop(RANGE_STACK *pRangeStack, RANGE* pRANGE)
     return pRANGE;
 }
 
-static inline int IsNeedSwap(int value, int nextValue, ORDER order)
+static inline int Compare(int value, int nextValue, ORDER order)
 {
     switch(order)
     {
     case ASCENDING:
-        return value > nextValue ? 1 : 0;
+        return value - nextValue;
     case DSCENDING:
-        return value < nextValue ? 1 : 0;
+        return nextValue - value;
     default:
         return 0;
     }
@@ -119,7 +119,7 @@ void BubbleSort(int iArry[], int len, ORDER order)
     {
         for (int j = 0; j < len - i; ++j)
         {
-            if (IsNeedSwap(iArry[j], iArry[j + 1], order))
+            if (Compare(iArry[j], iArry[j + 1], order) > 0)
             {
                 Swap2Value(&iArry[j], &iArry[j + 1]);
             }
@@ -137,7 +137,7 @@ void SelectSort(int iArry[], int len, ORDER order)
     {
         for (int j = i + 1; j < len; ++j)
         {
-            if (IsNeedSwap(iArry[i], iArry[j], order))
+            if (Compare(iArry[i], iArry[j], order) > 0)
             {
                 Swap2Value(&iArry[i], &iArry[j]);
             }
@@ -156,7 +156,7 @@ void InsertSort(int iArry[], int len, ORDER order)
     {
         key = iArry[i];
         j = i - 1;
-        while (j >= 0 && IsNeedSwap(iArry[j], key, order))
+        while (j >= 0 && Compare(iArry[j], key, order) > 0)
         {//±ß±È½Ï£¬±ßÒÆ¶¯
             iArry[j + 1] = iArry[j];
             j--;
@@ -174,13 +174,11 @@ static int partition(int iArry[], int start, int end, ORDER order)
     int left = start, right = end - 1;
     while (left < right)
     {
-        while (left < right && (iArry[left] < pivot && ASCENDING == order 
-            || iArry[left] > pivot && DSCENDING == order))
+        while (left < right && Compare(pivot, iArry[left], order) > 0)
         {
             left++;
         }
-        while (left < right && (iArry[right] >= pivot && ASCENDING == order 
-            || iArry[right] <= pivot && DSCENDING == order))
+        while (left < right && Compare(pivot, iArry[right], order) <= 0)
         {
             right--;
         }
@@ -189,8 +187,7 @@ static int partition(int iArry[], int start, int end, ORDER order)
             Swap2Value(&iArry[left], &iArry[right]);
         }
     }
-    if (iArry[left] >= pivot && ASCENDING == order 
-        || iArry[left] <= pivot && DSCENDING == order) 
+    if (Compare(pivot, iArry[left], order) <= 0) 
     {
         Swap2Value(&iArry[left], &iArry[end]);
     }

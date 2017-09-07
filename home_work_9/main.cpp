@@ -17,7 +17,7 @@ int _tmain(int argc, TCHAR *argv[])
     _tprintf(TEXT("the directory is %s\n"), argv[1]);
     setlocale(LC_ALL, "");
 
-    ret = DeleteDirectoryRecursive(argv[1]);
+    ret = DeleteDirectoryEx(argv[1]);
     if (ERR_SUCCESS != ret)
     {
         _tprintf(TEXT("failed to delete the directory. [ret = %d]\n"), ret);

@@ -104,16 +104,18 @@ int Search(char *strArr[], int len, char *str)
 
 int BinarySearch(char *strArr[], int len, char *str)
 {
-    int mid;
+    int mid, cmpRet;
     int start = 0, end = len - 1;
-    mid = (start + end) >> 1;
-    do 
+    
+    while (start <= end)
     {
-        if (strcmp(strArr[mid], str) > 0)
+        mid = (start + end) >> 1;
+        cmpRet = strcmp(strArr[mid], str);
+        if (cmpRet > 0)
         {
             end = mid - 1;
         }
-        else if (strcmp(strArr[mid], str) < 0)
+        else if (cmpRet < 0)
         {
             start = mid + 1;
         }
@@ -121,8 +123,7 @@ int BinarySearch(char *strArr[], int len, char *str)
         {
             return mid;
         }
-        mid = (start + end) >> 1;
-    } while (mid >= start && mid <= end);
+    }
 
     return -1;
 }

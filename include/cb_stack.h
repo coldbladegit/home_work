@@ -26,6 +26,12 @@ int cb_stack_push(void *pStack, void *pData);
 void* cb_stack_pop(void *pStack);
 
 /**
+* @brief   访问栈顶元素
+* @return  栈不为空返回栈顶元素,否则NULL
+**/
+void* cb_stack_top(void *pStack);
+
+/**
 * @brief    判断栈是否为空
 * @return  为空返回true,否则返回false
 **/
