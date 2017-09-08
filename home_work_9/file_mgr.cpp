@@ -189,11 +189,12 @@ static inline bool PopHandleAndOffset(void *pStack, HANDLE *hFind, int *offset)
 
 static void FreeStackReservedEx(void *pStack)
 {
-    void *pTop = NULL;
+    HANDLE_FLAG *pTop = NULL;
 
-    pTop = cb_stack_pop(pStack);
+    pTop = (HANDLE_FLAG *) cb_stack_pop(pStack);
     while(NULL != pTop)
     {
+        FindClose(pTop->hFind);
         free(pTop);
         pTop = cb_stack_pop(pStack);
     }
