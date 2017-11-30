@@ -187,6 +187,10 @@
 				RelativePath=".\repstr.cpp"
 				>
 			</File>
+			<File
+				RelativePath=".\swap_str.cpp"
+				>
+			</File>
 		</Filter>
 		<Filter
 			Name="Í·ÎÄ¼þ"
@@ -207,6 +211,10 @@
 			</File>
 			<File
 				RelativePath=".\repstr.h"
+				>
+			</File>
+			<File
+				RelativePath=".\swap_str.h"
 				>
 			</File>
 		</Filter>

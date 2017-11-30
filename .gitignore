@@ -4,7 +4,8 @@
 *.ncb
 *.suo
 *.vcproj
-Debug
+Debug/
+Release/
  
 # Compiled source #
 ###################

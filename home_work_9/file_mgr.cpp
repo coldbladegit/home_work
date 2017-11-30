@@ -26,7 +26,7 @@ static int CloneDirectory(TCHAR *pDir, TCHAR **ppNewDir)
     return ERR_SUCCESS;
 }
 
-static inline int GetSubDirectory(TCHAR *pDir, TCHAR *pFileName, void *pStack)
+static inline int GetSubDirectory(TCHAR *pDir, TCHAR *pFileName, CB_STACK *pStack)
 {
     size_t strLen= 0;
     TCHAR *pSubDir = NULL;
@@ -39,15 +39,15 @@ static inline int GetSubDirectory(TCHAR *pDir, TCHAR *pFileName, void *pStack)
     }
     _stprintf(pSubDir, TEXT("%s%s\\"), pDir, pFileName);
 
-    return cb_stack_push(pStack, pSubDir);
+    return pStack->push(pStack, pSubDir);
 }
 
-static inline int DeleteCurDirectory(void *pStack)
+static inline int DeleteCurDirectory(CB_STACK *pStack)
 {
     int ret = ERR_SUCCESS;
     TCHAR *pTopElem = NULL;
 
-    pTopElem = (TCHAR *)cb_stack_pop(pStack);
+    pTopElem = (TCHAR *)pStack->pop(pStack);
     if (NULL != pTopElem)
     {
         ret = RemoveDirectory(pTopElem) ? ERR_SUCCESS : GetLastError();
@@ -56,10 +56,10 @@ static inline int DeleteCurDirectory(void *pStack)
     return ret;
 }
 
-static int DoDelete(void *pStack)
+static int DoDelete(CB_STACK *pStack)
 {
     int ret = ERR_SUCCESS;
-    TCHAR *pCurDir = (TCHAR *)cb_stack_top(pStack);//只是访问栈顶元素,并不出栈
+    TCHAR *pCurDir = (TCHAR *)pStack->top(pStack);//只是访问栈顶元素,并不出栈
     TCHAR tmpBuf[MAX_PATH];
     WIN32_FIND_DATA fileData;
     HANDLE hFind = INVALID_HANDLE_VALUE;
@@ -105,7 +105,7 @@ static int DoDelete(void *pStack)
 
     if (ERROR_NO_MORE_FILES == ret)
     {//当前目录已遍历完
-        if (pCurDir == cb_stack_top(pStack))
+        if (pCurDir == pStack->top(pStack))
         {//当前目录为空文件夹或不包含子文件夹(没有任何压栈动作)
             DeleteCurDirectory(pStack);
         }
@@ -115,25 +115,25 @@ static int DoDelete(void *pStack)
     return ret;
 }
 
-static void FreeStackReserved(void *pStack)
+static void FreeStackReserved(CB_STACK *pStack)
 {
     void *pTop = NULL;
 
-    pTop = cb_stack_pop(pStack);
+    pTop = pStack->pop(pStack);
     while(NULL != pTop)
     {
         free(pTop);
-        pTop = cb_stack_pop(pStack);
+        pTop = pStack->pop(pStack);
     }
 }
 
 int DeleteDirectory(TCHAR *pDir)
 {
     int ret = ERR_SUCCESS;
-    void *pStack = NULL;//缓存待删除的文件夹
+    CB_STACK *pStack = NULL;//缓存待删除的文件夹
     TCHAR *pCloneDir = NULL;//当前正在遍历的目录
 
-    ret = cb_create_stack(&pStack);
+    ret = cb_new_stack(&pStack);
     if (ERR_SUCCESS != ret)
     {
         return ret;
@@ -142,22 +142,23 @@ int DeleteDirectory(TCHAR *pDir)
     ret = CloneDirectory(pDir, &pCloneDir);
     if (ERR_SUCCESS != ret)
     {
-        cb_destroy_stack(pStack);
+        cb_delete_stack(pStack);
         return ret;
     }
-    cb_stack_push(pStack, pCloneDir);
+    pStack->push(pStack, pCloneDir);
     
     do 
     {
         ret = DoDelete(pStack);
-    } while (!cb_is_stack_empty(pStack) && ERR_SUCCESS == ret);
+    } while (!pStack->is_empty(pStack) && ERR_SUCCESS == ret);
 
     FreeStackReserved(pStack);
-    cb_destroy_stack(pStack);
+    cb_delete_stack(pStack);
+
     return ret;
 }
 
-static inline int PushHandleAndOffset(void *pStack, HANDLE hFind, int offset)
+static inline int PushHandleAndOffset(CB_STACK *pStack, HANDLE hFind, int offset)
 {
     int ret = ERR_SUCCESS;
     HANDLE_FLAG *pData = NULL;
@@ -170,14 +171,14 @@ static inline int PushHandleAndOffset(void *pStack, HANDLE hFind, int offset)
     pData->hFind = hFind;
     pData->offset = offset;
 
-    return cb_stack_push(pStack, pData);
+    return pStack->push(pStack, pData);
 }
 
-static inline bool PopHandleAndOffset(void *pStack, HANDLE *hFind, int *offset)
+static inline bool PopHandleAndOffset(CB_STACK *pStack, HANDLE *hFind, int *offset)
 {
     HANDLE_FLAG *pTop = NULL;
 
-    pTop = (HANDLE_FLAG *) cb_stack_pop(pStack);
+    pTop = (HANDLE_FLAG *) pStack->pop(pStack);
     while(NULL != pTop)
     {
         *hFind = pTop->hFind;
@@ -187,16 +188,16 @@ static inline bool PopHandleAndOffset(void *pStack, HANDLE *hFind, int *offset)
     return false;
 }
 
-static void FreeStackReservedEx(void *pStack)
+static void FreeStackReservedEx(CB_STACK *pStack)
 {
     HANDLE_FLAG *pTop = NULL;
 
-    pTop = (HANDLE_FLAG *) cb_stack_pop(pStack);
+    pTop = (HANDLE_FLAG *) pStack->pop(pStack);
     while(NULL != pTop)
     {
         FindClose(pTop->hFind);
         free(pTop);
-        pTop = cb_stack_pop(pStack);
+        pTop = (HANDLE_FLAG *)pStack->pop(pStack);
     }
 }
 
@@ -205,7 +206,7 @@ int DeleteDirectoryEx(TCHAR *pDir)
     int ret = ERR_SUCCESS;
     int offset = 0;
     TCHAR *pBuf = NULL;//一片大缓冲
-    void *pStack = NULL;
+    CB_STACK *pStack = NULL;
     WIN32_FIND_DATA fileData;
     HANDLE hFind = INVALID_HANDLE_VALUE;
 
@@ -214,7 +215,7 @@ int DeleteDirectoryEx(TCHAR *pDir)
         return ERR_INVALID_PARAM;
     }
 
-    ret = cb_create_stack(&pStack);
+    ret = cb_new_stack(&pStack);
     if (ERR_SUCCESS != ret)
     {
         return ret;
@@ -223,7 +224,7 @@ int DeleteDirectoryEx(TCHAR *pDir)
     pBuf = (TCHAR *) malloc(sizeof(TCHAR) * MAX_DIR_PATH);
     if (NULL == pBuf)
     {
-        cb_destroy_stack(pStack);
+        cb_delete_stack(pStack);
         return ERR_MALLOC_MEM_FAILD;
     }
 
@@ -294,7 +295,8 @@ int DeleteDirectoryEx(TCHAR *pDir)
     }
 
     FreeStackReservedEx(pStack);
-    cb_destroy_stack(pStack);
+    cb_delete_stack(pStack);
     free(pBuf);
+
     return ret;
 }

@@ -1,6 +1,13 @@
 #ifndef _ERR_NO_H
 #define _ERR_NO_H
 
+#include <assert.h>
+
+#define G_ASSERT(p)     if (!(p)) {\
+                            printf("%s %d is asserted!\n", __FILE__, __LINE__);\
+                        }\
+                        assert(p);
+
 #define ERR_SUCCESS             0
 #define ERR_FAILED              -1
 #define ERR_INVALID_PARAM       -2
@@ -15,5 +22,9 @@
 #define ERR_STR_TOO_LONG        108
 #define ERR_NOT_FIND            109
 #define ERR_NOT_INITIALIZED		110
+#define ERR_INIT_SOCKET_FAILED  111
+#define ERR_SESSION_IS_WORKING  112
+#define ERR_SESSION_NOT_START   113
+#define ERR_INVALID_INDEX       114
 
 #endif//_ERR_NO_H

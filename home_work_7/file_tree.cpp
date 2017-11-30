@@ -59,7 +59,7 @@ static BINARY_TREE_NODE* CreateTreeNode(TCHAR *pDirPath, int hierarchy)
     return pNode;
 }
 
-static int ListBrothers(BINARY_TREE_NODE *pBrother, HANDLE hFind, void *pStack)
+static int ListBrothers(BINARY_TREE_NODE *pBrother, HANDLE hFind, CB_STACK *pStack)
 {
     int ret = ERR_SUCCESS;
     BINARY_TREE_NODE *pNode = NULL;
@@ -80,7 +80,7 @@ static int ListBrothers(BINARY_TREE_NODE *pBrother, HANDLE hFind, void *pStack)
             pBrother->pBrother = pNode;
             if ((pNode->fileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0)
             {//是一个文件夹
-                ret = cb_stack_push(pStack, pNode);
+                ret = pStack->push(pStack, pNode);
                 if (ERR_SUCCESS != ret)
                 {
                     break;
@@ -98,7 +98,7 @@ static int ListBrothers(BINARY_TREE_NODE *pBrother, HANDLE hFind, void *pStack)
     return ret;
 }
 
-static int ListDirectoryFiles(BINARY_TREE_NODE *parent, void *pStack)
+static int ListDirectoryFiles(BINARY_TREE_NODE *parent, CB_STACK *pStack)
 {
     int ret = ERR_SUCCESS;
     size_t dirPathLen = 0;
@@ -152,7 +152,7 @@ static int ListDirectoryFiles(BINARY_TREE_NODE *parent, void *pStack)
     parent->pChild = pNode;
     if ((pNode->fileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0)
     {//是一个文件夹
-        ret = cb_stack_push(pStack, pNode);
+        ret = pStack->push(pStack, pNode);
         if (ERR_SUCCESS != ret)
         {
             return ret;
@@ -167,7 +167,7 @@ int ListDirectoryFiles(char *dirPath, void **ppFileTree)
 {
     int ret = ERR_SUCCESS;
     TCHAR dir[MAX_PATH];
-    void *pStack = NULL;
+    CB_STACK *pStack = NULL;
     BINARY_TREE_NODE *pNode = NULL;
     int dirLen = strlen(dirPath) + 1;
 
@@ -182,7 +182,7 @@ int ListDirectoryFiles(char *dirPath, void **ppFileTree)
 
     do 
     {
-        ret = cb_create_stack(&pStack);
+        ret = cb_new_stack(&pStack);
         if (ERR_SUCCESS != ret)
         {
             break;
@@ -203,18 +203,19 @@ int ListDirectoryFiles(char *dirPath, void **ppFileTree)
             {
                 break;
             }
-            pNode = (BINARY_TREE_NODE *) cb_stack_pop(pStack);
+            pNode = (BINARY_TREE_NODE *) pStack->pop(pStack);
         }
     } while (0);
 
     if (NULL != pStack)
     {
-        cb_destroy_stack(pStack);
+        cb_delete_stack(pStack);
     }
+
     return ret;
 }
 
-static int SortBrotherNodes(BINARY_TREE_NODE *pNode, void *pStack)
+static int SortBrotherNodes(BINARY_TREE_NODE *pNode, CB_STACK *pStack)
 {
     int ret = ERR_SUCCESS;
     BINARY_TREE_NODE *p, *q, *pTmp;
@@ -235,7 +236,7 @@ static int SortBrotherNodes(BINARY_TREE_NODE *pNode, void *pStack)
         }
         if (NULL != p->pChild)
         {
-            ret = cb_stack_push(pStack, p->pChild);
+            ret = pStack->push(pStack, p->pChild);
             if (ERR_SUCCESS != ret)
             {
                 break;
@@ -248,7 +249,7 @@ static int SortBrotherNodes(BINARY_TREE_NODE *pNode, void *pStack)
 int SortByModifyTime(void *pFileTree)
 {
     int ret = ERR_SUCCESS;
-    void *pStack = NULL;
+    CB_STACK *pStack = NULL;
     BINARY_TREE_NODE *pNode = NULL;
 
     if (NULL == pFileTree)
@@ -256,7 +257,7 @@ int SortByModifyTime(void *pFileTree)
         return ERR_SUCCESS;
     }
 
-    ret = cb_create_stack(&pStack);
+    ret = cb_new_stack(&pStack);
     if (ERR_SUCCESS != ret)
     {
         return ret;
@@ -270,14 +271,15 @@ int SortByModifyTime(void *pFileTree)
         {
             break;
         }
-        pNode = (BINARY_TREE_NODE *) cb_stack_pop(pStack);
+        pNode = (BINARY_TREE_NODE *) pStack->pop(pStack);
     }
 
-    cb_destroy_stack(pStack);
+    cb_delete_stack(pStack);
+
     return ret;
 }
 
-static int PrintChildren(BINARY_TREE_NODE *pNode, void *pStack)
+static int PrintChildren(BINARY_TREE_NODE *pNode, CB_STACK *pStack)
 {
     int ret = ERR_SUCCESS;
     BINARY_TREE_NODE *pBrother = NULL;
@@ -298,7 +300,7 @@ static int PrintChildren(BINARY_TREE_NODE *pNode, void *pStack)
         pBrother = pNode->pBrother;
         if(NULL != pBrother)
         {
-            ret = cb_stack_push(pStack, pBrother);
+            ret = pStack->push(pStack, pBrother);
             if (ERR_SUCCESS != ret)
             {
                 break;
@@ -313,7 +315,7 @@ static int PrintChildren(BINARY_TREE_NODE *pNode, void *pStack)
 int PrintFileTree(void *pFileTree)
 {
     int ret = ERR_SUCCESS;
-    void *pStack = NULL;
+    CB_STACK *pStack = NULL;
     BINARY_TREE_NODE *pNode = NULL;
 	TCHAR rootName[5] = {0};
 
@@ -322,7 +324,7 @@ int PrintFileTree(void *pFileTree)
         return ERR_SUCCESS;
     }
 
-    ret = cb_create_stack(&pStack);
+    ret = cb_new_stack(&pStack);
     if (ERR_SUCCESS != ret)
     {
         return ret;
@@ -344,17 +346,18 @@ int PrintFileTree(void *pFileTree)
         {
             break;
         }
-        pNode = (BINARY_TREE_NODE *) cb_stack_pop(pStack);
+        pNode = (BINARY_TREE_NODE *) pStack->pop(pStack);
     }
 
-    cb_destroy_stack(pStack);
+    cb_delete_stack(pStack);
+
     return ret;
 }
 
 int FreeFileTree(void *pFileTree)
 {
     int ret = ERR_SUCCESS;
-    void *pStack = NULL;
+    CB_STACK *pStack = NULL;
     BINARY_TREE_NODE *pNode = NULL;
     BINARY_TREE_NODE *pTmp = NULL;
     
@@ -363,7 +366,7 @@ int FreeFileTree(void *pFileTree)
         return ERR_SUCCESS;
     }
 
-    ret = cb_create_stack(&pStack);
+    ret = cb_new_stack(&pStack);
     if (ERR_SUCCESS != ret)
     {
         return ret;
@@ -374,18 +377,18 @@ int FreeFileTree(void *pFileTree)
     {//广度优先遍历
         if (NULL != pNode->pBrother)
         {
-            ret = cb_stack_push(pStack, pNode);
+            ret = pStack->push(pStack, pNode);
             pNode = pNode->pBrother;
         }
         else if (NULL != pNode->pChild)
         {
-            ret = cb_stack_push(pStack, pNode);
+            ret = pStack->push(pStack, pNode);
             pNode = pNode->pChild;
         }
         else
         {
             pTmp = pNode;
-            pNode = (BINARY_TREE_NODE *) cb_stack_pop(pStack);        
+            pNode = (BINARY_TREE_NODE *) pStack->pop(pStack);        
             if (NULL != pNode)
             {
                 if (pTmp == pNode->pBrother)
@@ -401,6 +404,6 @@ int FreeFileTree(void *pFileTree)
         }
     } while (ERR_SUCCESS == ret && NULL != pNode);
     
-    cb_destroy_stack(pStack);
+    cb_delete_stack(pStack);
     return ret;
 }

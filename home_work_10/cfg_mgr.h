@@ -1,22 +1,13 @@
 #ifndef _CFG_MGR_H
 #define _CFG_MGR_H
 
-int ReadConfig();
+typedef struct _CONFIG_MGR {
+    int (*read_config) (void *);
+    int (*write_config) (void *);
+} CONFIG_MGR;
 
-int WriteConfig();
+int new_config_mgr(CONFIG_MGR **ppMgr);
 
-int SaveSchool(void *pData);
-
-int SaveGrade(void *pData);
-
-int InsertStudent(void *pData);
-
-void *SearchStudent(int stuNo);
-
-void *RemoveStudent(int stuNo);
-
-int UpdateStudentGrade(int stuNo, int grade);
-
-int UpdateStudentScore(int stuNo, int score);
+void delete_config_mgr(CONFIG_MGR *pMgr);
 
 #endif//_CFG_MGR_H

@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <string.h>
+#include "swap_str.h"
 #include "err_no.h"
 #include "calculate.h"
 #include "repstr.h"
@@ -13,6 +14,8 @@ typedef struct _STRUCT_TEST {
 void TestFunc();
 
 void TestMallocMemory();
+
+void TestSwapString();
 
 int main(int argc, char **argv)
 {
@@ -50,6 +53,7 @@ int main(int argc, char **argv)
         printf("please input <原文件>  <原串> <目标串> <目标文件>!!!\n");
     }
     TestMallocMemory();
+    TestSwapString();
     return 0;
 }
 
@@ -110,4 +114,23 @@ void TestMallocMemory()
     printf(" longStr = |%d|\n",pLongStr);
 
     DestroyMemory();
+}
+
+void TestSwapString()
+{
+    char *p1 = (char *)GetMemory(20);
+    memset(p1, 'a', 19);
+    p1[19] = 0;
+
+
+    char *p2 = (char *)GetMemory(100);
+    memset(p2, 'b', 99);
+    p2[99] = 0;
+
+    int ret = Swap(&p1, &p2);
+    printf("转换之前");
+    ret > 0 ? printf("p1大") : ret ==0 ? printf("一样大") : printf("p2大");
+
+    printf("\n转换之后\n p1:为%s\n p2为:%s\n",p1,p2);
+
 }

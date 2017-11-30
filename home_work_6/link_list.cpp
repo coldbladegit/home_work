@@ -3,6 +3,7 @@
 #include <string.h>
 #include "link_list.h"
 #include "err_no.h"
+#include "struct.h"
 
 typedef struct _LINK_NODE {
     STUDENT     *pStu;
@@ -14,6 +15,7 @@ static LINK_NODE g_header = {NULL, NULL};
 int Insert(int id, const char *sName, int grade)
 {
     LINK_NODE *pNode = NULL;
+    LINK_NODE *pPrevNode = NULL;
     STUDENT *pStu = NULL;
     LINK_NODE *pNewNode = NULL;
 
@@ -38,14 +40,16 @@ int Insert(int id, const char *sName, int grade)
         return ERR_MALLOC_MEM_FAILD;
     }
     pNewNode->pStu = pStu;
-    pNewNode->pNext = NULL;
 
-    pNode = &g_header;
-    while (NULL != pNode->pNext)
-    {//遍历到表尾
+    pPrevNode = &g_header;
+    pNode = pPrevNode->pNext;
+    while (NULL != pNode && pNode->pStu->nId <= pNewNode->pStu->nId)
+    {
+        pPrevNode = pNode;
         pNode = pNode->pNext;
     }
-    pNode->pNext = pNewNode;
+    pNewNode->pNext = pNode;
+    pPrevNode->pNext = pNewNode;
 
     return ERR_SUCCESS;
 }
@@ -92,19 +96,22 @@ STUDENT *Search(int id)
 
 void Sort()
 {
-    LINK_NODE *p = NULL;
-    LINK_NODE *q = NULL;
-    STUDENT   *pStu = NULL;
+    LINK_NODE **pp = NULL;
+    LINK_NODE **qq = NULL;
+    LINK_NODE *pNode = NULL;
 
-    for (p = g_header.pNext; NULL != p; p = p->pNext)
+    for (pp = &g_header.pNext; NULL != *pp; pp = &((*pp)->pNext))
     {//选择排序
-        for (q = p->pNext; NULL != q; q = q->pNext)
+        for (qq = &((*pp)->pNext); NULL != *qq; qq = &((*qq)->pNext))
         {
-            if (p->pStu->nGrade < q->pStu->nGrade)
+            if ((*pp)->pStu->nGrade < (*qq)->pStu->nGrade)
             {
-                pStu = p->pStu;
-                p->pStu = q->pStu;
-                q->pStu = pStu;
+                pNode = (*pp)->pNext;
+                (*pp)->pNext = (*qq)->pNext;
+                (*qq)->pNext = pNode;
+                pNode = *pp;
+                *pp = *qq;
+                *qq = pNode;
             }
         }
     }

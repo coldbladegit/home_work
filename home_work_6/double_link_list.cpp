@@ -3,6 +3,7 @@
 #include <string.h>
 #include "double_link_list.h"
 #include "err_no.h"
+#include "struct.h"
 
 typedef struct _DOUBLE_LINK_NODE {
     STUDENT     *pStu;
@@ -10,7 +11,8 @@ typedef struct _DOUBLE_LINK_NODE {
     _DOUBLE_LINK_NODE  *pNext;
 }DOUBLE_LINK_NODE;
 
-static DOUBLE_LINK_NODE g_header = {NULL, NULL, NULL};
+static DOUBLE_LINK_NODE *g_pHeader = NULL;
+static DOUBLE_LINK_NODE *g_pTail = NULL;
 
 int Insert_s(int id, const char *sName, int grade)
 {
@@ -39,15 +41,31 @@ int Insert_s(int id, const char *sName, int grade)
         return ERR_MALLOC_MEM_FAILD;
     }
     pNewNode->pStu = pStu;
-    pNewNode->pNext = NULL;
 
-    pNode = &g_header;
-    while (NULL != pNode->pNext)
-    {//遍历到链表末尾
-        pNode = pNode->pNext;
+    if (NULL == g_pHeader)
+    {
+        g_pHeader = pNewNode;
+        g_pTail = pNewNode;
+        pNewNode->pNext = NULL;
+        pNewNode->pPrev = NULL;
+
     }
-    pNode->pNext = pNewNode;
-    pNewNode->pPrev = pNode;
+    else
+    {
+        pNode = g_pTail;
+        while (NULL != pNode->pPrev && pNode->pStu->nId >= pNewNode->pStu->nId)
+        {
+            pNode = pNode->pPrev;
+        }
+        pNewNode->pNext = pNode->pNext;
+        pNode->pNext = pNewNode;
+        pNewNode->pPrev = pNode;
+
+        if (g_pTail == pNode)
+        {
+            g_pTail = pNewNode;
+        }
+    }    
 
     return ERR_SUCCESS;
 }
@@ -56,8 +74,8 @@ STUDENT *Remove_s(int id, STUDENT *pStu)
 {
     DOUBLE_LINK_NODE *pNode = NULL;
 
-    pNode = &g_header;
-    while(NULL != (pNode = pNode->pNext))
+    pNode = g_pHeader;
+    while(NULL != pNode)
     {
         if (pNode->pStu->nId == id)
         {
@@ -65,12 +83,38 @@ STUDENT *Remove_s(int id, STUDENT *pStu)
             pStu->nGrade = pNode->pStu->nGrade;
             strcpy(pStu->sName, pNode->pStu->sName);
 
-            pNode->pPrev->pNext = pNode->pNext;
+            if (g_pHeader == pNode || g_pTail == pNode)
+            {
+                if (g_pHeader == pNode)
+                {
+                    g_pHeader = pNode->pNext;
+                    if (NULL != g_pHeader)
+                    {
+                        g_pHeader->pPrev = NULL;
+                    }
+                }
+                if (g_pTail == pNode)
+                {
+                    g_pTail = pNode->pPrev;
+                    if (NULL != g_pTail)
+                    {
+                        g_pTail->pNext = NULL;
+                    }
+                }
+            }
+            else
+            {
+                pNode->pNext->pPrev = pNode->pPrev;
+                pNode->pPrev->pNext = pNode->pNext;
+            }
+            
             free(pNode->pStu);
             free(pNode);
             return pStu;
         }
+        pNode = pNode->pNext;
     }
+
     return NULL;
 }
 
@@ -78,14 +122,16 @@ STUDENT *Search_s(int id)
 {
     DOUBLE_LINK_NODE *pNode = NULL;
 
-    pNode = &g_header;
-    while(NULL != (pNode = pNode->pNext))
+    pNode = g_pHeader;
+    while(NULL != pNode)
     {
         if (pNode->pStu->nId == id)
         {
             return pNode->pStu;
         }
+        pNode = pNode->pNext;
     }
+
     return NULL;
 }
 
@@ -93,26 +139,31 @@ void Sort_s()
 {
     DOUBLE_LINK_NODE *p = NULL;
     DOUBLE_LINK_NODE *q = NULL;
-    STUDENT *pStu;
+    DOUBLE_LINK_NODE *pNode = NULL;
+    bool isNeedChange = false;
     
-    p = g_header.pNext;
-    if (NULL == p)
+    for (p = g_pHeader; NULL != p; p = p->pNext)
     {
-        return;
-    }
-    for (p = p->pNext; NULL != p; p = p->pNext)
-    {
-        pStu = p->pStu;
-        for (q = p->pPrev; NULL != q->pPrev; q = q->pPrev)
+        isNeedChange = false;
+        for (q = p->pPrev; NULL != q; q = q->pPrev)
         {//插入排序
-            if (pStu->nGrade < q->pStu->nGrade)
-            {//边比较，边移动
-                q->pNext->pStu = q->pStu;
+            if (p->pStu->nGrade > q->pStu->nGrade)
+            {
+                isNeedChange = true;
+                break;
             }
         }
-        if (q->pNext != p)
+        if (isNeedChange)
         {
-            q->pNext->pStu = pStu;
+            q = q->pNext;//这个节点才是要交换的节点
+
+            pNode = p->pNext;
+            p->pNext = q->pNext;
+            q->pNext = pNode;
+
+            pNode = p->pPrev;
+            p->pPrev = q->pPrev;
+            q->pPrev = pNode;
         }
     }
 }
@@ -133,9 +184,10 @@ void PrintIn_s()
     DOUBLE_LINK_NODE *pNode = NULL;
 
     printf("学号\t\t姓名\t成绩\t\n");
-    pNode = &g_header;
-    while(NULL != (pNode = pNode->pNext))
+    pNode = g_pHeader;
+    while(NULL != pNode)
     {
         printf("%d\t%s\t%d\n", pNode->pStu->nId, pNode->pStu->sName, pNode->pStu->nGrade);
+        pNode = pNode->pNext;
     }
 }

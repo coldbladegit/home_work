@@ -6,11 +6,11 @@
 #include "err_no.h"
 
 #define MAX_BUFF_SIZE   1024
-#define MAX_WORD_LEN    1023
+#define MAX_WORD_LEN    1024
 
 typedef struct _FILE_READER_BUFFER{
     int         reserved;//一次解析后剩余的字串
-    int         strLen;//当前缓冲中整个字串的长度
+    int         charCnt;//当前缓冲中整个字串的长度
     int         rOffset;//遍历偏移
     int         wOffset;//写偏移
     int         wordLen;
@@ -42,7 +42,7 @@ static int Initialize(REP_WORD_PARAM *pRepWordParam, FILE_READER *pReader, FILE_
     }
     pReader->pSrcWord = pRepWordParam->pSrcWord;
     pReader->reserved = 0;
-    pReader->strLen = 0;
+    pReader->charCnt = 0;
     pReader->rOffset = 0;
     pReader->wOffset = 0;
     pReader->wordLen = strlen(pRepWordParam->pSrcWord);
@@ -77,12 +77,11 @@ static inline int ReadFile(FILE_READER *pReader)
         return ERR_EOF_FILE;//文件末尾
     }
     int reserved = pReader->reserved;
-    int readCount = fread(pReader->pBuf + reserved, sizeof(char), MAX_BUFF_SIZE - reserved - 1, pReader->pRStream);
+    int readCount = fread(pReader->pBuf + reserved, sizeof(char), MAX_BUFF_SIZE - reserved, pReader->pRStream);
     pReader->rOffset = 0;
     pReader->wOffset = 0;
     pReader->reserved = 0;
-    pReader->strLen = readCount + reserved;
-    pReader->pBuf[pReader->strLen] = '\0';//追加一个结束符
+    pReader->charCnt = readCount + reserved;
     return ERR_SUCCESS;
 }
 
@@ -101,16 +100,17 @@ static inline void WriteFile(FILE_WRITER *pWriter, FILE_READER *pReader, bool is
     }
 }
 
-static inline int FindNextWord(FILE_READER *pReader, int *wordLen)
+static inline int FindNextWord(FILE_READER *pReader)
 {
-    char *pBuf = pReader->pBuf + pReader->rOffset;
-    char *pStr = strchr(pBuf, ' ');
-    if (NULL == pStr)
+    for (int index = pReader->rOffset; index < pReader->charCnt; ++index)
     {
-        return ERR_FAILED;
+        if (pReader->pBuf[index] == ' ')
+        {
+            return index - pReader->rOffset;
+        }
     }
-    *wordLen = pStr - pBuf;
-    return ERR_SUCCESS;
+
+    return -1;
 }
 
 static int DoParse(FILE_READER *pReader, FILE_WRITER *pWriter)
@@ -119,9 +119,10 @@ static int DoParse(FILE_READER *pReader, FILE_WRITER *pWriter)
 
     do 
     {
-        if (ERR_SUCCESS != FindNextWord(pReader, &wordLen))
+        wordLen = FindNextWord(pReader);
+        if (-1 == wordLen)
         {
-            if (pReader->strLen - pReader->rOffset > MAX_WORD_LEN)
+            if (pReader->charCnt - pReader->rOffset > MAX_WORD_LEN)
             {
                 ret = ERR_WORD_TOO_LONG;
             }
@@ -132,13 +133,13 @@ static int DoParse(FILE_READER *pReader, FILE_WRITER *pWriter)
             WriteFile(pWriter, pReader, true);
         }
         pReader->rOffset += wordLen + 1;//跳过空格字符
-    } while (pReader->rOffset < pReader->strLen);
+    } while (pReader->rOffset < pReader->charCnt);
     
     if (ERR_SUCCESS == ret)
     {
         //将缓冲区中的之前遍历了但未写入文件的字串写入文件
         WriteFile(pWriter, pReader, false);
-        pReader->reserved = pReader->strLen - pReader->rOffset;
+        pReader->reserved = pReader->charCnt - pReader->rOffset;
         if (pReader->reserved > 0 && pReader->rOffset > 0)
         {//缓冲区中最后一个字符不是空格,则移动未解析的字串到缓冲区的首部
             memmove(pReader->pBuf,  pReader->pBuf + pReader->rOffset, pReader->reserved);
